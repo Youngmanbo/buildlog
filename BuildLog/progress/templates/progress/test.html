@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>동/층/호 편집 보드</title>
+  <style>
+    :root{
+      --border:#2b2b2b;
+      --grid:#6b6b6b;
+      --head:#efefef;
+      --subhead:#f6f6f6;
+      --cell:#ffffff;
+      --type:#fff4c2;      /* 연한 노랑(원본 느낌) */
+      --green:#7fb06a;     /* 초록 영역 */
+      --basement:#5f5f5f;  /* 지하 바 */
+      --txt:#111;
+    }
+    body{ margin:16px; font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif; color:var(--txt); }
+    .toolbar{
+      display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+      padding:10px 12px; border:1px solid #ddd; border-radius:10px; margin-bottom:12px;
+      background:#fafafa;
+    }
+    .toolbar button{ padding:8px 10px; border:1px solid #bbb; background:#fff; border-radius:8px; cursor:pointer; }
+    .toolbar button:hover{ background:#f3f3f3; }
+    .toolbar small{ color:#444; }
+    .toolbar textarea{ width:100%; height:140px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    .board{ display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:16px; align-items:start; }
+    .building{ border:2px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .building__title{ padding:10px 12px; background:var(--head); font-weight:900; font-size:18px; border-bottom:2px solid var(--border); text-align:center; }
+    table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; }
+    th, td{ border:1px solid var(--grid); text-align:center; padding:6px 4px; height:28px; position:relative; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    thead th{ background:var(--subhead); font-weight:900; }
+    .col-floor{ width:54px; background:var(--subhead); font-weight:900; }
+    .cell--type{ background:var(--type); font-weight:700; color:#333; }
+    .cell--green{ background:var(--green); color:#11310c; font-weight:900; }
+    .cell--basement{ background:var(--basement); color:#eee; font-weight:900; }
+    .cell--blocked{
+      background:
+        linear-gradient(45deg, transparent 47%, rgba(0,0,0,.55) 48%, rgba(0,0,0,.55) 52%, transparent 53%),
+        linear-gradient(-45deg, transparent 47%, rgba(0,0,0,.55) 48%, rgba(0,0,0,.55) 52%, transparent 53%),
+        #fff;
+    }
+    td[data-edit="1"]{ cursor:pointer; }
+    td[data-edit="1"]:hover{ outline:2px solid rgba(0,0,0,.2); outline-offset:-2px; }
+    .hint{ margin-top:6px; color:#555; font-size:12px; }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <button id="btnExport">Export JSON</button>
+    <button id="btnImport">Import JSON</button>
+    <button id="btnClear">Clear All</button>
+    <small>
+      사용법: 셀 클릭 = 상태 순환(일반 → X → 초록 → 일반), 셀 더블클릭 = 텍스트 입력(41A/31C 등)
+    </small>
+    <div class="hint">아래 텍스트박스는 Export/Import 용입니다.</div>
+    <textarea id="io" spellcheck="false" placeholder="Export를 누르면 JSON이 여기에 생성됩니다. Import는 여기에 JSON을 붙여넣고 Import 버튼을 누르세요."></textarea>
+  </div>
+
+  <div class="board" id="board"></div>
+
+<script>
+  // --------- 1) 보드 기본 골격(층/호) ---------
+  const range = (a,b)=>{ const r=[]; for(let i=a;i>=b;i--) r.push(i); return r; };
+
+  // 각 동별 층 구성(원본처럼 “없는 층”은 빈 라벨로)
+  const BUILDINGS = [
+    { id:"301", title:"301동", units:["1호","2호","3호","4호","5호","6호"], rows:[...range(15,1).map(f=>`${f}F`), "지하1"] },
+    { id:"302", title:"302동", units:["1호","2호","3호","4호","5호","6호"], rows:["","","","", ...range(11,1).map(f=>`${f}F`), "지하1"] },
+    { id:"303", title:"303동", units:["1호","2호","3호","4호","5호","6호"], rows:[...range(15,1).map(f=>`${f}F`), "지하1"] },
+    { id:"304", title:"304동", units:["1호","2호","3호","4호"], rows:["","","","","","", ...range(10,1).map(f=>`${f}F`), "지하1"] },
+    { id:"305", title:"305동", units:["1호","2호","3호","4호","5호","6호"], rows:["","","","","","","", ...range(9,1).map(f=>`${f}F`), "지하1"] },
+    { id:"306", title:"306동", units:["1호","2호"], rows:[...range(11,1).map(f=>`${f}F`), "지하1"] },
+    { id:"307", title:"307동", units:["1호","2호","3호","4호","5호","6호"], rows:["","","","","","","","", ...range(7,1).map(f=>`${f}F`), "지하1"] },
+    { id:"308", title:"308동", units:["1호","2호","3호","4호","5호","6호","7호"], rows:["","","","","","","","", ...range(7,1).map(f=>`${f}F`), "지하1"] },
+  ];
+
+  // --------- 2) 상태 저장 구조 ---------
+  // state: "type"(기본/노랑) | "blocked"(X) | "green"(초록)
+  // text: "41A" 같은 텍스트
+  const state = {
+    // buildingId: { "rowLabel|unit": { state, text } }
+    data: {}
+  };
+
+  const cellKey = (rowLabel, unit) => `${rowLabel}|${unit}`;
+
+  function ensureBuilding(id){
+    if(!state.data[id]) state.data[id] = {};
+  }
+
+  function setCell(bid, rowLabel, unit, next){
+    ensureBuilding(bid);
+    state.data[bid][cellKey(rowLabel, unit)] = next;
+  }
+
+  function getCell(bid, rowLabel, unit){
+    ensureBuilding(bid);
+    return state.data[bid][cellKey(rowLabel, unit)] || null;
+  }
+
+  // --------- 3) 렌더링 ---------
+  function render(){
+    const board = document.getElementById("board");
+    board.innerHTML = "";
+
+    BUILDINGS.forEach(b=>{
+      const wrap = document.createElement("div");
+      wrap.className = "building";
+
+      const title = document.createElement("div");
+      title.className = "building__title";
+      title.textContent = b.title;
+      wrap.appendChild(title);
+
+      const table = document.createElement("table");
+
+      // head
+      const thead = document.createElement("thead");
+      const trh = document.createElement("tr");
+      const th0 = document.createElement("th");
+      th0.className="col-floor";
+      th0.textContent="";
+      trh.appendChild(th0);
+
+      b.units.forEach(u=>{
+        const th = document.createElement("th");
+        th.textContent = u;
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+      table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+
+      b.rows.forEach(rowLabel=>{
+        const tr = document.createElement("tr");
+
+        const tdf = document.createElement("td");
+        tdf.className="col-floor";
+        tdf.textContent = rowLabel;
+        tr.appendChild(tdf);
+
+        b.units.forEach(u=>{
+          const td = document.createElement("td");
+          td.dataset.edit = "1";
+          td.dataset.bid = b.id;
+          td.dataset.row = rowLabel;
+          td.dataset.unit = u;
+
+          if(rowLabel === "지하1"){
+            td.className = "cell--basement";
+            td.textContent = "";
+          } else {
+            // 기본은 노랑(type)
+            td.className = "cell--type";
+            td.textContent = "";
+          }
+
+          const saved = getCell(b.id, rowLabel, u);
+          if(saved){
+            td.classList.remove("cell--type","cell--blocked","cell--green");
+            if(rowLabel === "지하1") td.classList.add("cell--basement");
+
+            if(saved.state === "blocked") td.classList.add("cell--blocked");
+            else if(saved.state === "green") td.classList.add("cell--green");
+            else td.classList.add("cell--type");
+
+            if(saved.text && saved.state !== "blocked") td.textContent = saved.text;
+            else td.textContent = "";
+          }
+
+          tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      board.appendChild(wrap);
+    });
+  }
+
+  // --------- 4) 인터랙션: 클릭(상태 순환), 더블클릭(텍스트 입력) ---------
+  function cycleState(current){
+    // 일반(type) → blocked → green → type
+    if(!current) return { state:"blocked", text:"" };           // 첫 클릭은 X로 가게(원본 맞추기 쉬움)
+    if(current.state === "type") return { state:"blocked", text:"" };
+    if(current.state === "blocked") return { state:"green", text:(current.text||"") };
+    return { state:"type", text:(current.text||"") };
+  }
+
+  document.addEventListener("click", (e)=>{
+    const td = e.target.closest("td[data-edit='1']");
+    if(!td) return;
+    const bid = td.dataset.bid;
+    const rowLabel = td.dataset.row;
+    const unit = td.dataset.unit;
+    if(rowLabel === "지하1") return; // 지하 바는 상태 변경 안 함(원본 유지)
+
+    const cur = getCell(bid, rowLabel, unit) || { state:"type", text: td.textContent || "" };
+    const next = cycleState(cur);
+    setCell(bid, rowLabel, unit, next);
+    render();
+  });
+
+  document.addEventListener("dblclick", (e)=>{
+    const td = e.target.closest("td[data-edit='1']");
+    if(!td) return;
+    const bid = td.dataset.bid;
+    const rowLabel = td.dataset.row;
+    const unit = td.dataset.unit;
+    if(rowLabel === "지하1") return;
+
+    const cur = getCell(bid, rowLabel, unit) || { state:"type", text:"" };
+    if(cur.state === "blocked") return; // X 셀은 텍스트 입력 불필요
+
+    const v = prompt("셀 텍스트 입력(예: 41A, 31C, 65A ...)", cur.text || "");
+    if(v === null) return;
+    setCell(bid, rowLabel, unit, { ...cur, text: v.trim() });
+    render();
+  });
+
+  // --------- 5) Export / Import ---------
+  document.getElementById("btnExport").addEventListener("click", ()=>{
+    document.getElementById("io").value = JSON.stringify(state.data, null, 2);
+  });
+
+  document.getElementById("btnImport").addEventListener("click", ()=>{
+    try{
+      const txt = document.getElementById("io").value.trim();
+      const obj = JSON.parse(txt);
+      state.data = obj || {};
+      render();
+    }catch(err){
+      alert("JSON 파싱 실패: " + err.message);
+    }
+  });
+
+  document.getElementById("btnClear").addEventListener("click", ()=>{
+    if(!confirm("전체 초기화할까요?")) return;
+    state.data = {};
+    render();
+  });
+
+  // 최초 렌더
+  render();
+</script>
+
+</body>
+</html>
