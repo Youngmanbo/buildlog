@@ -1,0 +1,110 @@
+############################
+# Python / Django Core
+############################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+############################
+# Django
+############################
+db.sqlite3
+*.log
+local_settings.py
+secrets.json
+
+############################
+# Virtual Environment
+############################
+venv/
+.env/
+.env.*
+.python-version
+.venv/
+.venv.*
+
+
+############################
+# Static / Media
+############################
+media/
+staticfiles/
+static_root/
+
+############################
+# Migrations (선택)
+############################
+# 초기 설계 단계에서만 사용
+# 배포 전에는 반드시 해제 권장
+#migrations/
+
+############################
+# IDE / Editor
+############################
+.vscode/
+.idea/
+*.swp
+*.swo
+
+############################
+# OS
+############################
+.DS_Store
+Thumbs.db
+desktop.ini
+
+############################
+# Excel / Data Processing
+############################
+*.xlsx
+*.xls
+*.csv
+*.tsv
+
+############################
+# PDF / Image Output
+############################
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+############################
+# Crawling / Automation Output
+############################
+output/
+downloads/
+screenshots/
+temp/
+
+############################
+# Logs / Debug
+############################
+logs/
+*.trace
+*.bak
+
+############################
+# Build / Cache
+############################
+.cache/
+pytest_cache/
+.coverage
+htmlcov/
+
+############################
+# Node / Frontend (있을 경우)
+############################
+node_modules/
+dist/
+build/
+
+############################
+# Security (절대 커밋 금지)
+############################
+*.key
+*.pem
+*.crt

@@ -1,0 +1,138 @@
+{% load static %}
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>좌표 따기 도구</title>
+  <style>
+    body{ margin:16px; font-family:system-ui,"Noto Sans KR",sans-serif; }
+    .wrap{ max-width:1200px; margin:0 auto; }
+    .top{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+    button{ padding:8px 10px; border:1px solid #bbb; background:#fff; border-radius:10px; cursor:pointer; }
+    button:hover{ background:#f3f3f3; }
+    input{ padding:8px 10px; border:1px solid #bbb; border-radius:10px; min-width:220px; }
+    .grid{ display:grid; grid-template-columns: 1fr 360px; gap:12px; align-items:start; }
+    .map{ border:1px solid #ddd; border-radius:12px; overflow:hidden; background:#fff; }
+    .svgbox{ width:100%; aspect-ratio: 751 / 563; }
+    svg{ width:100%; height:100%; display:block; }
+    textarea{ width:100%; height:520px; font-family: ui-monospace, Consolas, monospace; font-size:12px; padding:10px; border:1px solid #ddd; border-radius:12px; }
+    .hint{ color:#555; font-size:12px; margin-top:8px; line-height:1.5; }
+    .pt{ fill:#e60000; stroke:#fff; stroke-width:2; }
+    .poly{ fill: rgba(0,120,255,0.12); stroke: rgba(0,120,255,1); stroke-width: 2.5; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <input id="name" placeholder="대상 이름 (예: 301동, 피트니스센터)" />
+    <button id="btnNew">새 폴리곤 시작</button>
+    <button id="btnUndo">마지막 점 취소</button>
+    <button id="btnClose">폴리곤 닫기(완료)</button>
+    <button id="btnClear">전체 초기화</button>
+  </div>
+
+  <div class="grid">
+    <div class="map">
+      <div class="svgbox">
+        <svg id="svg" viewBox="0 0 751 563" xmlns="http://www.w3.org/2000/svg">
+          <image href="{% static 'progress/img/annot_map.png' %}" x="0" y="0" width="751" height="563" preserveAspectRatio="xMinYMin meet" />
+          <polygon id="previewPoly" class="poly" points=""></polygon>
+          <g id="pts"></g>
+        </svg>
+      </div>
+    </div>
+
+    <div>
+      <textarea id="out" spellcheck="false" placeholder="여기에 points가 누적됩니다."></textarea>
+      <div class="hint">
+        - 지도 위 클릭: 점 추가<br>
+        - “폴리곤 닫기”: 현재 점들을 points로 출력<br>
+        - 주동은 폴리곤(면), 출입구/뷰는 원형(점)으로 따면 편함<br>
+        - points 형식: x,y x,y x,y ...
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const svg = document.getElementById("svg");
+  const ptsG = document.getElementById("pts");
+  const preview = document.getElementById("previewPoly");
+  const out = document.getElementById("out");
+  const nameInput = document.getElementById("name");
+
+  let points = [];
+  let all = []; // {name, points}
+
+  function redraw(){
+    // 점 찍기 표시
+    ptsG.innerHTML = "";
+    points.forEach(([x,y])=>{
+      const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      c.setAttribute("class","pt");
+      c.setAttribute("cx", x);
+      c.setAttribute("cy", y);
+      c.setAttribute("r", 6);
+      ptsG.appendChild(c);
+    });
+    preview.setAttribute("points", points.map(p=>p.join(",")).join(" "));
+  }
+
+  function svgPoint(evt){
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    const ctm = svg.getScreenCTM().inverse();
+    const p = pt.matrixTransform(ctm);
+    return [Math.round(p.x), Math.round(p.y)];
+  }
+
+  svg.addEventListener("click", (e)=>{
+    // 이미지/폴리곤 어디를 클릭해도 좌표 찍힘
+    const [x,y] = svgPoint(e);
+    points.push([x,y]);
+    redraw();
+  });
+
+  document.getElementById("btnNew").onclick = ()=>{
+    points = [];
+    redraw();
+  };
+
+  document.getElementById("btnUndo").onclick = ()=>{
+    points.pop();
+    redraw();
+  };
+
+  document.getElementById("btnClose").onclick = ()=>{
+    if(points.length < 3){
+      alert("폴리곤은 최소 3점 필요");
+      return;
+    }
+    const name = (nameInput.value || "").trim();
+    if(!name){
+      alert("대상 이름을 입력하세요(예: 301동)");
+      return;
+    }
+    const ptsStr = points.map(p=>p.join(",")).join(" ");
+    all.push({name, points: ptsStr});
+
+    // 출력 누적
+    out.value += `\n<!-- ${name} -->\n<polygon class="zone" data-name="${name}" data-tags="${name}" points="${ptsStr}" />\n`;
+
+    // 다음 대상 준비
+    points = [];
+    redraw();
+  };
+
+  document.getElementById("btnClear").onclick = ()=>{
+    if(!confirm("전체 초기화?")) return;
+    points = [];
+    all = [];
+    out.value = "";
+    redraw();
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>단지 배치도</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Malgun Gothic', sans-serif;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .map-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .map-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .clickable-area {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+            background: rgba(255, 255, 255, 0);
+        }
+        .clickable-area:hover {
+            background: rgba(255, 200, 0, 0.3);
+            border: 2px solid #ff6b00;
+            transform: scale(1.05);
+        }
+        .info-panel {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            min-height: 100px;
+        }
+        .info-panel h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .info-panel p {
+            color: #666;
+            line-height: 1.6;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff;
+            border-radius: 8px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>행정중심복합도시 5-1생활권 L-3BL 공동주택 단지배치도</h1>
+        
+        <div class="map-container">
+            <img src="{% static 'progress/img/annot_map.png' %}" alt="단지 배치도" id="baseMap" style="border: 2px solid #ddd;">
+            
+            <!-- 주동 클릭 영역 -->
+            <div class="clickable-area" style="left: 8%; top: 18%; width: 10%; height: 12%;" onclick="showInfo('307동', '주동 (8가구)', 'building')"></div>
+            <div class="clickable-area" style="left: 18%; top: 25%; width: 8%; height: 10%;" onclick="showInfo('308동', '주동 (8가구)', 'building')"></div>
+            <div class="clickable-area" style="left: 38%; top: 28%; width: 8%; height: 10%;" onclick="showInfo('301동', '주동 (8가구)', 'building')"></div>
+            <div class="clickable-area" style="left: 58%; top: 30%; width: 8%; height: 10%;" onclick="showInfo('302동', '주동 (8가구)', 'building')"></div>
+            <div class="clickable-area" style="left: 35%; top: 48%; width: 10%; height: 12%;" onclick="showInfo('303동', '주동 (8가구)', 'building')"></div>
+            <div class="clickable-area" style="left: 18%; top: 60%; width: 8%; height: 10%;" onclick="showInfo('304동', '주동 (8가구)', 'building')"></div>
+            <div class="clickable-area" style="left: 58%; top: 65%; width: 8%; height: 10%;" onclick="showInfo('305동', '주동 (8가구)', 'building')"></div>
+            
+            <!-- 근린생활시설 -->
+            <div class="clickable-area" style="left: 30%; top: 14%; width: 12%; height: 8%;" onclick="showInfo('스마트팩토리', '근린생활시설', 'commercial')"></div>
+            <div class="clickable-area" style="left: 45%; top: 14%; width: 10%; height: 8%;" onclick="showInfo('근린생활시설', '근린생활시설', 'commercial')"></div>
+            <div class="clickable-area" style="left: 62%; top: 14%; width: 10%; height: 8%;" onclick="showInfo('근린생활시설', '근린생활시설', 'commercial')"></div>
+            <div class="clickable-area" style="left: 75%; top: 14%; width: 12%; height: 8%;" onclick="showInfo('스마트 스테이션', '근린생활시설', 'commercial')"></div>
+            <div class="clickable-area" style="left: 75%; top: 24%; width: 10%; height: 10%;" onclick="showInfo('스마트 팜/주민카페', '근린생활시설', 'commercial')"></div>
+            
+            <!-- 부대시설 -->
+            <div class="clickable-area" style="left: 8%; top: 35%; width: 8%; height: 8%;" onclick="showInfo('작은도서관', '부대시설', 'facility')"></div>
+            <div class="clickable-area" style="left: 68%; top: 55%; width: 10%; height: 10%;" onclick="showInfo('피트니스 센터', '부대시설', 'facility')"></div>
+            <div class="clickable-area" style="left: 78%; top: 28%; width: 8%; height: 8%;" onclick="showInfo('사회적 기업', '부대시설', 'facility')"></div>
+            
+            <!-- 관리소 및 기타 -->
+            <div class="clickable-area" style="left: 28%; top: 70%; width: 8%; height: 8%;" onclick="showInfo('관리소', '관리시설', 'management')"></div>
+            <div class="clickable-area" style="left: 78%; top: 68%; width: 8%; height: 8%;" onclick="showInfo('노약 라운지', '커뮤니티 시설', 'community')"></div>
+            
+            <!-- 지하주차장 출입구 (빨간 원) -->
+            <div class="clickable-area" style="left: 24%; top: 9%; width: 3%; height: 4%; border-radius: 50%;" onclick="showInfo('View C', '지하주차장 출입구', 'parking')"></div>
+            <div class="clickable-area" style="left: 86%; top: 9%; width: 3%; height: 4%; border-radius: 50%;" onclick="showInfo('View A', '지하주차장 출입구', 'parking')"></div>
+            <div class="clickable-area" style="left: 24%; top: 28%; width: 3%; height: 4%; border-radius: 50%;" onclick="showInfo('출입구', '지하주차장 출입구', 'parking')"></div>
+            <div class="clickable-area" style="left: 59%; top: 33%; width: 3%; height: 4%; border-radius: 50%;" onclick="showInfo('출입구', '지하주차장 출입구', 'parking')"></div>
+            <div class="clickable-area" style="left: 59%; top: 51%; width: 3%; height: 4%; border-radius: 50%;" onclick="showInfo('출입구', '지하주차장 출입구', 'parking')"></div>
+            <div class="clickable-area" style="left: 30%; top: 55%; width: 3%; height: 4%; border-radius: 50%;" onclick="showInfo('출입구', '지하주차장 출입구', 'parking')"></div>
+        </div>
+
+        <div class="info-panel" id="infoPanel">
+            <h2>시설 정보</h2>
+            <p>지도에서 건물이나 시설을 클릭하면 상세 정보가 표시됩니다.</p>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #999;"></div>
+                <span>주동 (8가구)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff9933;"></div>
+                <span>근린생활시설 & 혁신성장지원</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #5eb9b4;"></div>
+                <span>부대시설</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #d4d43c;"></div>
+                <span>통합관리실</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #6b9e6b;"></div>
+                <span>지하주차장 출입구</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #e33;"></div>
+                <span>🔴 관리자 출입구</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 이미지 로드
+        const img = document.getElementById('baseMap');
+        img.onerror = function() {
+            this.style.background = '#f0f0f0';
+            this.style.minHeight = '600px';
+            this.parentElement.innerHTML += '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#666;"><p style="font-size:18px;">📋 단지 배치도</p><p>이미지 파일을 업로드해주세요</p><p style="font-size:14px;margin-top:10px;">img 태그의 src 속성에 이미지 경로를 입력하세요</p></div>';
+        };
+        
+        function showInfo(name, type, category) {
+            const infoPanel = document.getElementById('infoPanel');
+            let description = '';
+            
+            switch(category) {
+                case 'building':
+                    description = `<h2>${name}</h2>
+                        <p><strong>구분:</strong> ${type}</p>
+                        <p><strong>설명:</strong> 주거용 건물입니다. 8가구가 거주하는 아파트 동입니다.</p>`;
+                    break;
+                case 'commercial':
+                    description = `<h2>${name}</h2>
+                        <p><strong>구분:</strong> ${type}</p>
+                        <p><strong>설명:</strong> 주민들을 위한 편의시설 및 상업시설입니다.</p>`;
+                    break;
+                case 'facility':
+                    description = `<h2>${name}</h2>
+                        <p><strong>구분:</strong> ${type}</p>
+                        <p><strong>설명:</strong> 주민 편의를 위한 복지 및 여가 시설입니다.</p>`;
+                    break;
+                case 'parking':
+                    description = `<h2>${name}</h2>
+                        <p><strong>구분:</strong> ${type}</p>
+                        <p><strong>설명:</strong> 지하주차장으로 연결되는 차량 진입로입니다.</p>`;
+                    break;
+                case 'management':
+                    description = `<h2>${name}</h2>
+                        <p><strong>구분:</strong> ${type}</p>
+                        <p><strong>설명:</strong> 단지 관리 및 운영을 담당하는 시설입니다.</p>`;
+                    break;
+                case 'community':
+                    description = `<h2>${name}</h2>
+                        <p><strong>구분:</strong> ${type}</p>
+                        <p><strong>설명:</strong> 주민들의 커뮤니티 활동 공간입니다.</p>`;
+                    break;
+                default:
+                    description = `<h2>${name}</h2><p>${type}</p>`;
+            }
+            
+            infoPanel.innerHTML = description;
+            infoPanel.style.background = '#e8f5e9';
+            setTimeout(() => {
+                infoPanel.style.background = '#f8f9fa';
+            }, 300);
+        }
+    </script>
+</body>
+</html>

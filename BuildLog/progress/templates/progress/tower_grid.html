@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>동별 배치표</title>
+  <style>
+    :root{
+      --border:#1f2e54;       /* 남색 테두리 느낌 */
+      --grid:#273a6a;
+      --header:#cfd7ea;       /* 상단 호수 헤더 */
+      --floor:#e9edf6;        /* 층 라벨 */
+      --text:#1a1a1a;
+      --muted:#caa274;        /* 연한 갈색 글자(세대 타입) */
+      --green:#5a8f56;        /* 초록 영역 */
+      --greenText:#e9f3e8;
+      --basement:#616161;     /* 지하1 회색 */
+    }
+
+    body{font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial, sans-serif; margin:24px; color:var(--text);}
+    .wrap{display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start}
+
+    .tower{
+      border:2px solid var(--border);
+      border-radius:6px;
+      overflow:hidden;
+      width: 300px; /* 필요시 동마다 다르게 줄 수 있음 */
+      background:#fff;
+    }
+    .tower .title{
+      text-align:center;
+      font-weight:800;
+      letter-spacing:1px;
+      padding:8px 0;
+      border-bottom:2px solid var(--border);
+      background:#f7f8fb;
+    }
+
+    table.grid{
+      width:100%;
+      border-collapse:collapse;
+      table-layout:fixed;
+      font-size:13px;
+    }
+    table.grid th, table.grid td{
+      border:1px solid var(--grid);
+      text-align:center;
+      padding:6px 2px;
+      position:relative;
+      height:28px;
+      overflow:hidden;
+      white-space:nowrap;
+    }
+    /* 호수 헤더 */
+    table.grid thead th{
+      background:var(--header);
+      font-weight:700;
+    }
+    /* 좌측 층 라벨 */
+    table.grid .floor{
+      background:var(--floor);
+      font-weight:800;
+      width:52px;
+    }
+
+    /* 일반 칸의 글자 톤(사진처럼 약간 연하게) */
+    .unit{
+      color:var(--muted);
+      font-weight:700;
+      letter-spacing:.3px;
+    }
+
+    /* X 표시 칸 */
+    .blocked::before,
+    .blocked::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        linear-gradient(45deg, transparent 47%, var(--grid) 48%, var(--grid) 52%, transparent 53%),
+        linear-gradient(-45deg, transparent 47%, var(--grid) 48%, var(--grid) 52%, transparent 53%);
+      opacity:.9;
+      pointer-events:none;
+    }
+
+    /* 초록 영역 */
+    .green{
+      background:var(--green);
+      color:var(--greenText);
+      font-weight:800;
+    }
+
+    /* 지하1 라인(회색 바 느낌) */
+    .basement{
+      background:var(--basement);
+      color:#fff;
+      font-weight:800;
+    }
+
+    /* 동마다 폭 조절이 필요하면 클래스 추가 */
+    .w-narrow{width:260px;}
+    .w-wide{width:360px;}
+
+    /* 클릭/하이라이트(원하면) */
+    td[data-cell]{cursor:pointer;}
+    td[data-cell].active{outline:3px solid #ff4d4f; outline-offset:-3px;}
+  </style>
+</head>
+<body>
+
+<div class="wrap" id="app"></div>
+
+<script>
+  /*
+    데이터 구조:
+    - floors: ["15F","14F",...,"1F","지하1"]
+    - cols: ["1호","2호",...]
+    - cells[floorIndex][colIndex] = { text, blocked, green, colspan }
+      * green/blocked는 bool
+      * text는 표시 문구(예: "41A", "스마트팜", "관리사무소")
+      * colspan이 있으면 병합셀처럼(가로로 합치기) 처리
+  */
+
+  const TOWERS = [
+    {
+      name: "301동",
+      cols: ["1호","2호","3호","4호","5호","6호"],
+      floors: ["15F","14F","13F","12F","11F","10F","9F","8F","7F","6F","5F","4F","3F","2F","1F","지하1"],
+      // NOTE: 아래는 예시입니다. 사진대로 값을 정확히 넣고 싶으면 text/blocked/green만 수정하면 됩니다.
+      cells: [
+        // 15F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        // 14F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        // 13F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        // 12F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 11F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 10F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 9F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 8F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 7F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 6F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 5F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 4F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 3F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 2F (앞 3칸 X)
+        [{blocked:true},{blocked:true},{blocked:true},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 1F (앞 3칸 X)
+        [{blocked:true},{blocked:true},{blocked:true},{text:"31C"},{green:true,text:"스마트팜"},{green:true,text:"팜카페"}],
+        // 지하1
+        [{basement:true},{basement:true},{basement:true},{basement:true},{basement:true},{basement:true}],
+      ],
+    },
+
+    {
+      name: "302동",
+      cols: ["1호","2호","3호","4호","5호","6호"],
+      floors: ["11F","10F","9F","8F","7F","6F","5F","4F","3F","2F","1F","지하1"],
+      cells: [
+        // 상단 11F~9F는 사진에서 좌측 1~4는 세대, 5~6은 X 영역(예시)
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 2F: 2~3호 X (예시)
+        [{text:"41C"},{blocked:true},{blocked:true},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 1F: 1~3호 X (예시)
+        [{blocked:true},{blocked:true},{blocked:true},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 지하1
+        [{basement:true},{basement:true},{basement:true},{basement:true},{basement:true},{basement:true}],
+      ],
+    },
+
+    {
+      name: "303동",
+      cols: ["1호","2호","3호","4호","5호","6호"],
+      floors: ["15F","14F","13F","12F","11F","10F","9F","8F","7F","6F","5F","4F","3F","2F","1F","지하1"],
+      cells: [
+        // 15~12F: 1~4 세대 / 5~6 X (예시)
+        [{text:"41A"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41A"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41A"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41A"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        // 11~7F
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{blocked:true},{blocked:true}],
+        // 6~3F: 5~6에 55A/55B 등장(예시)
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 2F: 2~3호 X (예시)
+        [{text:"41C"},{blocked:true},{blocked:true},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 1F: 2~3호 X (예시)
+        [{text:"41C"},{blocked:true},{blocked:true},{text:"31C"},{text:"55A"},{text:"55B"}],
+        // 지하1
+        [{basement:true},{basement:true},{basement:true},{basement:true},{basement:true},{basement:true}],
+      ],
+    },
+
+    {
+      name: "304동",
+      cols: ["1호","2호","3호","4호"],
+      floors: ["10F","9F","8F","7F","6F","5F","4F","3F","2F","1F","지하1"],
+      cells: [
+        [{blocked:true},{blocked:true},{text:"65A"},{text:"84A"}],
+        [{blocked:true},{blocked:true},{text:"65A"},{text:"84A"}],
+        [{blocked:true},{blocked:true},{text:"65A"},{text:"84B"}],
+        [{blocked:true},{blocked:true},{text:"65B"},{text:"84A"}],
+        [{blocked:true},{blocked:true},{text:"65A"},{text:"84B"}],
+        [{text:"65B"},{text:"65A"},{text:"65B"},{text:"84A"}],
+        [{text:"65A"},{text:"65B"},{text:"65A"},{text:"84B"}],
+        [{text:"65B"},{text:"65A"},{text:"65B"},{text:"84A"}],
+        [{text:"65A"},{blocked:true},{text:"65A"},{blocked:true}],
+        [{text:"65A"},{blocked:true},{text:"65A"},{blocked:true}],
+        [{basement:true},{basement:true},{basement:true},{basement:true}],
+      ],
+    },
+
+    {
+      name: "305동",
+      cols: ["1호","2호","3호","4호","5호","6호"],
+      floors: ["9F","8F","7F","6F","5F","4F","3F","2F","1F","지하1"],
+      cells: [
+        [{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"},{blocked:true},{blocked:true}],
+        [{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"},{blocked:true},{blocked:true}],
+        [{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"},{blocked:true},{blocked:true}],
+        [{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"}],
+        [{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"}],
+        [{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"},{text:"41A"}],
+        [{text:"41B"},{text:"41B"},{text:"41B"},{text:"41B"},{text:"41B"},{text:"41B"}],
+        [{text:"41B"},{text:"41B"},{text:"41B"},{text:"41B"},{blocked:true},{blocked:true}],
+        [{text:"41B"},{text:"41B"},{text:"41B"},{text:"41B"},{green:true,text:"근린시설"},{green:true,text:"편의시설"}],
+        [{basement:true},{basement:true},{basement:true},{basement:true},{basement:true},{basement:true}],
+      ],
+    },
+
+    {
+      name: "306동",
+      cols: ["1호","2호"],
+      floors: ["11F","10F","9F","8F","7F","6F","5F","4F","3F","2F","1F","지하1"],
+      cells: [
+        [{text:"84A"},{text:"84A"}],
+        [{text:"84A"},{text:"84A"}],
+        [{text:"84A"},{text:"84A"}],
+        [{text:"84A"},{text:"84B"}],
+        [{text:"84B"},{text:"84A"}],
+        [{text:"84A"},{text:"84B"}],
+        [{text:"84B"},{text:"84A"}],
+        [{text:"84A"},{text:"84B"}],
+        [{text:"84B"},{text:"84A"}],
+        [{blocked:true},{text:"84A"}],
+        [{blocked:true},{green:true,text:"경로당"}],
+        [{basement:true},{basement:true}],
+      ],
+    },
+
+    {
+      name: "307동",
+      cols: ["1호","2호","3호","4호","5호","6호"],
+      floors: ["6F","5F","4F","3F","2F","1F","지하1"],
+      cells: [
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31A"},{text:"31A"},{text:"31C"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31A"},{text:"31A"},{text:"31C"}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31A"},{text:"31A"},{text:"31C"}],
+        [{text:"41B",cls:"unit-blue"},{text:"41B",cls:"unit-blue"},{text:"31B",cls:"unit-blue"},{text:"31B",cls:"unit-blue"},{green:true,text:"상가동"},{green:true,text:"상가동"}],
+        [{blocked:true},{blocked:true},{blocked:true},{blocked:true},{green:true,text:"상가동"},{green:true,text:"상가동"}],
+        [{green:true,text:"관리사무소",colspan:4},{green:true,text:"상가동"},{green:true,text:"상가동"}],
+        [{basement:true},{basement:true},{basement:true},{basement:true},{basement:true},{basement:true}],
+      ],
+    },
+
+    {
+      name: "308동",
+      cols: ["1호","2호","3호","4호","5호","6호","7호"],
+      floors: ["7F","6F","5F","4F","3F","2F","1F","지하1"],
+      cells: [
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31A"},{text:"31A"},{text:"31C"},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31A"},{text:"31A"},{text:"31C"},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31A"},{text:"31A"},{text:"31C"},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31A"},{text:"31A"},{text:"31C"},{blocked:true}],
+        [{text:"41C"},{text:"41A"},{text:"31A"},{text:"31A"},{blocked:true},{blocked:true},{blocked:true}],
+        [{blocked:true},{blocked:true},{blocked:true},{blocked:true},{blocked:true},{blocked:true},{blocked:true}],
+        [{green:true,text:"어린이집",colspan:4},{green:true,text:"부대시설",colspan:3}],
+        [{basement:true},{basement:true},{basement:true},{basement:true},{basement:true},{basement:true},{basement:true}],
+      ],
+    },
+  ];
+
+  // 307동에서 파란 글씨가 있었던 것처럼 보이는 부분 지원(선택)
+  const styleExtra = document.createElement("style");
+  styleExtra.textContent = `.unit-blue{ color:#274a9a; font-weight:800; }`;
+  document.head.appendChild(styleExtra);
+
+  const app = document.getElementById("app");
+
+  function cellClass(c){
+    const cls = [];
+    if (c?.blocked) cls.push("blocked");
+    if (c?.green) cls.push("green");
+    if (c?.basement) cls.push("basement");
+    if (c?.text && !c.green && !c.basement) cls.push("unit");
+    if (c?.cls) cls.push(c.cls);
+    return cls.join(" ");
+  }
+
+  function renderTower(tower){
+    const root = document.createElement("div");
+    root.className = `tower ${tower.widthClass||""}`.trim();
+
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = tower.name;
+    root.appendChild(title);
+
+    const table = document.createElement("table");
+    table.className = "grid";
+
+    // THEAD
+    const thead = document.createElement("thead");
+    const trh = document.createElement("tr");
+    const th0 = document.createElement("th");
+    th0.textContent = ""; // 좌상단
+    trh.appendChild(th0);
+    tower.cols.forEach(c=>{
+      const th = document.createElement("th");
+      th.textContent = c;
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh);
+    table.appendChild(thead);
+
+    // TBODY
+    const tbody = document.createElement("tbody");
+    tower.floors.forEach((floor, rIdx)=>{
+      const tr = document.createElement("tr");
+      const tdFloor = document.createElement("td");
+      tdFloor.className = "floor";
+      tdFloor.textContent = floor;
+      tr.appendChild(tdFloor);
+
+      let col = 0;
+      while (col < tower.cols.length){
+        const c = (tower.cells[rIdx] && tower.cells[rIdx][col]) ? tower.cells[rIdx][col] : {};
+        const td = document.createElement("td");
+        td.dataset.cell = `${tower.name}-${floor}-${tower.cols[col]}`;
+
+        const span = c.colspan ? Number(c.colspan) : 1;
+        if (span > 1) td.colSpan = span;
+
+        td.className = cellClass(c);
+        td.textContent = c.text || "";
+
+        // 클릭 하이라이트(원하면 사용)
+        td.addEventListener("click", ()=>{
+          document.querySelectorAll("td.active").forEach(x=>x.classList.remove("active"));
+          td.classList.add("active");
+        });
+
+        tr.appendChild(td);
+        col += span;
+      }
+
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    root.appendChild(table);
+    return root;
+  }
+
+  TOWERS.forEach(t=> app.appendChild(renderTower(t)));
+</script>
+
+</body>
+</html>

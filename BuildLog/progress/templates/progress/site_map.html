@@ -1,0 +1,259 @@
+{% load static %}
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>단지 배치도</title>
+
+  <style>
+    body{
+      margin:16px;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif;
+      color:#111;
+    }
+    .wrap{ max-width:1200px; margin:0 auto; }
+
+    /* 검색바 */
+    .bar{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+      padding:10px 12px;
+      border:1px solid #ddd; border-radius:12px;
+      background:#fafafa;
+      margin-bottom:12px;
+    }
+    .bar input{
+      flex:1; min-width:240px;
+      padding:10px 12px;
+      border:1px solid #bbb; border-radius:10px;
+      font-size:14px;
+    }
+    .bar button{
+      padding:10px 12px;
+      border:1px solid #bbb; border-radius:10px;
+      background:#fff;
+      cursor:pointer;
+    }
+    .bar button:hover{ background:#f3f3f3; }
+    .bar small{ color:#555; }
+
+    /* 지도: 원본 비율 고정(751:563) => 어떤 모니터에서도 좌표가 안 틀어짐 */
+    .map{
+      border:1px solid #ddd;
+      border-radius:12px;
+      overflow:hidden;
+      background:#fff;
+    }
+    .svgbox{
+      width:100%;
+      aspect-ratio: 751 / 563;
+    }
+    svg{
+      width:100%;
+      height:100%;
+      display:block;
+    }
+
+    /* 클릭 영역(폴리곤) */
+    .zone{
+      fill: transparent;
+      stroke: rgba(230,0,0,0.9);
+      stroke-width: 2.2;
+      cursor:pointer;
+      transition: fill .12s ease, stroke .12s ease, stroke-width .12s ease;
+    }
+    .zone:hover{
+      fill: rgba(230,0,0,0.10);
+      stroke: rgba(230,0,0,1);
+      stroke-width: 2.6;
+    }
+    /* 선택/검색 하이라이트 */
+    .zone.is-active{
+      fill: rgba(0,120,255,0.14);
+      stroke: rgba(0,120,255,1);
+      stroke-width: 3.8;
+    }
+
+    /* 정보 패널 */
+    .info{
+      margin-top:10px;
+      padding:10px 12px;
+      border:1px solid #ddd;
+      border-radius:12px;
+      background:#fff;
+    }
+    .chips{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+    .chip{
+      display:inline-block;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid #ccc;
+      background:#fafafa;
+      cursor:pointer;
+      user-select:none;
+      font-size:13px;
+    }
+    .chip:hover{ background:#f1f1f1; }
+    .muted{ color:#666; font-size:13px; }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <input id="q" placeholder="검색: 301동, 피트니스, 근린생활시설, 스타트 스테이션..." />
+    <button id="btnFind">검색</button>
+    <button id="btnClear">해제</button>
+    <small>Enter: 검색 / 클릭: 선택</small>
+  </div>
+
+  <div class="map">
+    <div class="svgbox">
+      <svg id="svg" viewBox="0 0 751 563" xmlns="http://www.w3.org/2000/svg">
+        <!-- 배경 이미지 -->
+        <image
+          href="{% static 'progress/img/annot_map.png' %}"
+          x="0" y="0" width="751" height="563"
+          preserveAspectRatio="xMinYMin meet"
+        />
+
+        <!-- ====== 당신이 찍어온 폴리곤 그대로 삽입 ====== -->
+
+        <!-- 301동 -->
+        <polygon class="zone" data-name="301동" data-tags="301 301동 주동" points="502,237 548,180 525,150 507,170 491,160 479,170 455,186" />
+
+        <!-- 302동 -->
+        <polygon class="zone" data-name="302동" data-tags="302 302동 주동" points="493,349 515,326 542,289 520,265 501,281 484,269 447,296 450,309" />
+
+        <!-- 303동 -->
+        <polygon class="zone" data-name="303동" data-tags="303 303동 주동" points="490,458 510,438 536,396 512,373 491,389 476,379 441,401 443,418" />
+
+        <!-- 304동 -->
+        <polygon class="zone" data-name="304동" data-tags="304 304동 주동" points="241,457 242,428 270,422 268,409 286,409 289,426 333,426 337,416 351,417 359,413 361,428 391,429 389,454" />
+
+        <!-- 305동 -->
+        <polygon class="zone" data-name="305동" data-tags="305 305동 주동" points="153,415 181,434 256,327 229,307" />
+
+        <!-- 306동 -->
+        <polygon class="zone" data-name="306동" data-tags="306 306동 주동" points="274,296 273,325 377,322 377,296" />
+
+        <!-- 307동 -->
+        <polygon class="zone" data-name="307동" data-tags="307 307동 주동" points="234,136 262,164 273,152 302,177 317,156 280,119 267,130 253,116" />
+
+        <!-- 308동 -->
+        <polygon class="zone" data-name="308동" data-tags="308 308동 주동" points="349,150 375,182 394,171 411,193 435,173 392,135 381,147 370,131" />
+
+        <!-- 워케이션 랩 -->
+        <polygon class="zone" data-name="워케이션 랩" data-tags="워케이션랩 워케이션 랩 부대시설" points="231,307 254,324 272,326 273,296 237,293" />
+
+        <!-- 관리사무소 -->
+        <polygon class="zone" data-name="관리사무소" data-tags="관리사무소 부대시설" points="243,199 259,215 302,178 275,155 254,171 256,179" />
+
+        <!-- 어린이집 -->
+        <polygon class="zone" data-name="어린이집" data-tags="어린이집 부대시설" points="348,153 340,158 377,201 368,209 382,222 407,198 388,178 380,188" />
+
+        <!-- 근린생활시설 1동 -->
+        <polygon class="zone" data-name="근린생활시설 1동" data-tags="근린생활시설 1동 근생" points="234,86 228,109 246,112 240,123 256,116 270,128 279,118 320,155 334,142 335,121 335,97" />
+
+        <!-- 공유오피스 -->
+        <polygon class="zone" data-name="공유오피스" data-tags="공유오피스 부대시설" points="365,123 365,134 380,144 392,135 400,142 413,154 481,151 475,165 480,169 491,159 508,171 526,155 505,121" />
+
+        <!-- 근린생활시설2동 (주의: 주석/이름 불일치 정리) -->
+        <polygon class="zone" data-name="근린생활시설2동" data-tags="근린생활시설 2동 근생" points="471,96 471,115 505,120 510,128 551,128 552,95" />
+
+        <!-- 스타트 스테이션 -->
+        <polygon class="zone" data-name="스타트 스테이션" data-tags="스타트스테이션 스타트 스테이션 근생" points="560,120 560,97 580,94 608,122 585,145" />
+
+        <!-- 근린생활시설 3동 -->
+        <polygon class="zone" data-name="근린생활시설 3동" data-tags="근린생활시설 3동 근생" points="598,154 579,168 580,203 604,205 603,179 611,171" />
+
+        <!-- 사회적기업 -->
+        <polygon class="zone" data-name="사회적기업" data-tags="사회적기업 부대시설" points="580,206 580,237 601,237 603,207" />
+
+        <!-- 근린생활시설 2동(중앙 블록) -->
+        <polygon class="zone" data-name="근린생활시설 2동" data-tags="근린생활시설 2동 중앙 근생" points="352,97 351,121 414,122 417,97" />
+
+        <!-- 피트니스센터 및 소셜라운지 -->
+        <polygon class="zone" data-name="피트니스센터 및 소셜라운지" data-tags="피트니스 소셜라운지 피트니스센터 부대시설" points="557,326 528,359 547,376 564,373 572,406 571,436 597,437 598,404 590,380 590,326" />
+
+        <!-- ============================================== -->
+
+      </svg>
+    </div>
+  </div>
+
+  <div class="info">
+    <div><b>선택:</b> <span id="picked">없음</span></div>
+    <div class="muted" id="pickedMeta"></div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+</div>
+
+<script>
+  const svg = document.getElementById("svg");
+  const q = document.getElementById("q");
+  const picked = document.getElementById("picked");
+  const pickedMeta = document.getElementById("pickedMeta");
+  const chips = document.getElementById("chips");
+
+  const zones = () => Array.from(svg.querySelectorAll(".zone"));
+
+  function clearActive(){
+    zones().forEach(z => z.classList.remove("is-active"));
+    picked.textContent = "없음";
+    pickedMeta.textContent = "";
+    chips.innerHTML = "";
+  }
+
+  function activate(el){
+    clearActive();
+    el.classList.add("is-active");
+
+    const name = el.dataset.name || "(이름 없음)";
+    const tags = (el.dataset.tags || "").split(/\s+/).filter(Boolean);
+
+    picked.textContent = name;
+    pickedMeta.textContent = tags.length ? ("tags: " + tags.join(", ")) : "";
+
+    chips.innerHTML = "";
+    tags.slice(0, 24).forEach(t=>{
+      const c = document.createElement("span");
+      c.className = "chip";
+      c.textContent = t;
+      c.addEventListener("click", ()=>{ q.value = t; findAndActivate(t); });
+      chips.appendChild(c);
+    });
+  }
+
+  function findAndActivate(text){
+    const term = (text || "").trim().toLowerCase();
+    if(!term) return;
+
+    const hit = zones().find(z=>{
+      const name = (z.dataset.name || "").toLowerCase();
+      const tags = (z.dataset.tags || "").toLowerCase();
+      return name.includes(term) || tags.includes(term);
+    });
+
+    if(hit) activate(hit);
+    else alert("검색 결과 없음: " + text);
+  }
+
+  svg.addEventListener("click", (e)=>{
+    const z = e.target.closest(".zone");
+    if(!z) return;
+
+    // 같은 걸 다시 클릭하면 해제
+    if(z.classList.contains("is-active")) clearActive();
+    else activate(z);
+  });
+
+  document.getElementById("btnFind").addEventListener("click", ()=>findAndActivate(q.value));
+  document.getElementById("btnClear").addEventListener("click", clearActive);
+  q.addEventListener("keydown", (e)=>{ if(e.key === "Enter") findAndActivate(q.value); });
+</script>
+
+</body>
+</html>

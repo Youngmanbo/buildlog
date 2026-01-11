@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>동별 세대/시설 그리드</title>
+  <style>
+    body{font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial, sans-serif; margin:18px;}
+    .layout{display:grid; grid-template-columns: 1fr 420px; gap:14px; align-items:start;}
+    .panel{border:1px solid #d8d8d8; border-radius:10px; padding:12px;}
+    .towers{display:flex; flex-wrap:wrap; gap:12px;}
+
+    .tower{border:2px solid #1f2e54; border-radius:8px; overflow:hidden; background:#fff;}
+    .tower .title{padding:8px 10px; font-weight:800; text-align:center; background:#f6f7fb; border-bottom:2px solid #1f2e54;}
+    table{border-collapse:collapse; table-layout:fixed; font-size:12px;}
+    th, td{border:1px solid #273a6a; text-align:center; height:26px; padding:2px; position:relative; white-space:nowrap; overflow:hidden;}
+    thead th{background:#cfd7ea; font-weight:800;}
+    .floor{background:#e9edf6; width:50px; font-weight:800;}
+    .unit{color:#caa274; font-weight:800;}
+    .blocked::before,.blocked::after{
+      content:""; position:absolute; inset:0;
+      background:
+        linear-gradient(45deg, transparent 47%, #273a6a 48%, #273a6a 52%, transparent 53%),
+        linear-gradient(-45deg, transparent 47%, #273a6a 48%, #273a6a 52%, transparent 53%);
+      opacity:.9; pointer-events:none;
+    }
+    .green{background:#5a8f56; color:#e9f3e8; font-weight:900;}
+    .basement{background:#616161; color:#fff; font-weight:900;}
+    td.slot{cursor:pointer;}
+    td.slot.active{outline:3px solid #ff4d4f; outline-offset:-3px;}
+
+    .rows{display:flex; flex-direction:column; gap:8px; max-height:70vh; overflow:auto;}
+    .row{display:grid; grid-template-columns: 1fr 90px 90px; gap:8px; align-items:center;}
+    .row input{width:100%; padding:6px; border:1px solid #ccc; border-radius:8px;}
+    .btn{padding:8px 10px; border:1px solid #333; border-radius:10px; background:#fff; cursor:pointer; font-weight:800;}
+    .muted{color:#777; font-size:12px;}
+    .head{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  </style>
+</head>
+<body>
+
+<div class="layout">
+  <div class="panel">
+    <div class="head">
+      <div>
+        <div style="font-weight:900; font-size:16px;">동별 그리드</div>
+        <div class="muted">클릭하면 우측에서 해당 구역 자재(계획/사용)를 입력·저장합니다.</div>
+      </div>
+    </div>
+
+    <div class="towers" id="towers"></div>
+  </div>
+
+  <div class="panel">
+    <div style="font-weight:900; font-size:16px;">선택 구역</div>
+    <div id="slotInfo" class="muted" style="margin:6px 0 10px;">아직 선택되지 않았습니다.</div>
+
+    <div id="items" class="rows"></div>
+
+    <div style="margin-top:10px; display:flex; gap:8px;">
+      <button class="btn" id="saveBtn" disabled>저장</button>
+      <span class="muted" id="saveMsg"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // CSRF (Django 기본)
+  function getCookie(name) {
+    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  }
+  const csrftoken = getCookie('csrftoken');
+
+  // period는 서버에서 내려준 값 사용(없으면 querystring으로 period=.. 붙여도 됨)
+  const PERIOD_ID = {{ period.id|default:"null" }};
+
+  // -----------------------------
+  // 1) DB 기반 그리드 데이터를 내려주는 API가 가장 정석인데,
+  //    여기서는 "초기 버전"으로 템플릿에 JSON을 박아넣는 방식 권장.
+  //    (실사용 시에는 towers/slots를 서버에서 JSON으로 내려주세요)
+  // -----------------------------
+
+  // 간단화를 위해: 서버에 "그리드 JSON" endpoint를 만들거나,
+  // 아래처럼 임시로 직접 작성할 수도 있습니다.
+  //
+  // 최종 추천: UnitSlot DB에서 tower별 floors/lines를 묶어 JSON 반환 API 만들기.
+  //
+  // 지금 답변에서는 "API로 slot 클릭"만 보여주기 위해, 화면에 slot을 미리 배치했다고 가정합니다.
+
+  // 실제 적용 시: 아래 payload를 서버에서 구성하는 게 맞습니다.
+  // payload 예시 구조: [{tower:"301동", cols:6, floors:[15..-1], cells:[[{id,kind,text}...]]}]
+  const GRID = {{ grid_json|default:"null" }};
+
+  // 만약 grid_json을 아직 안 만든 상태라면,
+  // "일단 화면 동작"을 위해 아래처럼 빈 배열로 두고,
+  // 템플릿에서 tower/slots를 돌며 DOM을 생성하는 쪽으로 바꾸면 됩니다.
+  // 여기서는 grid_json을 만든다는 전제.
+
+  const towersEl = document.getElementById("towers");
+  const slotInfoEl = document.getElementById("slotInfo");
+  const itemsEl = document.getElementById("items");
+  const saveBtn = document.getElementById("saveBtn");
+  const saveMsg = document.getElementById("saveMsg");
+
+  let selected = { slotId: null, items: [] };
+
+  function clsFor(cell){
+    const cls = ["slot"];
+    if (cell.kind === "BLOCKED") cls.push("blocked");
+    if (cell.kind === "FACILITY") cls.push("green");
+    if (cell.kind === "BASEMENT") cls.push("basement");
+    if (cell.kind === "UNIT") cls.push("unit");
+    return cls.join(" ");
+  }
+
+  function floorLabel(f){
+    if (f === -1) return "지하1";
+    return `${f}F`;
+  }
+
+  function render(){
+    towersEl.innerHTML = "";
+    (GRID || []).forEach(t=>{
+      const wrap = document.createElement("div");
+      wrap.className = "tower";
+      wrap.style.width = (t.cols <= 4) ? "240px" : (t.cols === 7 ? "340px" : "300px");
+
+      const title = document.createElement("div");
+      title.className = "title";
+      title.textContent = t.name;
+      wrap.appendChild(title);
+
+      const table = document.createElement("table");
+
+      // head
+      const thead = document.createElement("thead");
+      const trh = document.createElement("tr");
+      const th0 = document.createElement("th");
+      th0.textContent = "";
+      trh.appendChild(th0);
+      for(let i=1;i<=t.cols;i++){
+        const th = document.createElement("th");
+        th.textContent = `${i}호`;
+        trh.appendChild(th);
+      }
+      thead.appendChild(trh);
+      table.appendChild(thead);
+
+      // body
+      const tbody = document.createElement("tbody");
+      t.floors.forEach((f, rIdx)=>{
+        const tr = document.createElement("tr");
+        const tdF = document.createElement("td");
+        tdF.className = "floor";
+        tdF.textContent = floorLabel(f);
+        tr.appendChild(tdF);
+
+        t.cells[rIdx].forEach((cell)=>{
+          const td = document.createElement("td");
+          td.className = clsFor(cell);
+          td.textContent = cell.text || "";
+          if (cell.id){
+            td.dataset.slotId = cell.id;
+            td.addEventListener("click", ()=>selectSlot(cell.id, td));
+          }
+          tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+
+      wrap.appendChild(table);
+      towersEl.appendChild(wrap);
+    });
+  }
+
+  async function selectSlot(slotId, td){
+    document.querySelectorAll("td.slot.active").forEach(x=>x.classList.remove("active"));
+    td.classList.add("active");
+
+    saveMsg.textContent = "";
+    itemsEl.innerHTML = "불러오는 중…";
+    saveBtn.disabled = true;
+
+    const res = await fetch(`/progress/api/slot/${slotId}/materials/?period=${PERIOD_ID}`);
+    const data = await res.json();
+
+    selected.slotId = slotId;
+    selected.items = data.items || [];
+
+    const f = data.slot.floor === -1 ? "지하1" : `${data.slot.floor}F`;
+    const l = `${data.slot.line_no}호`;
+    const title = `${data.slot.tower} / ${f} / ${l} / ${data.slot.kind === "UNIT" ? (data.slot.unit_type||"") : (data.slot.label||data.slot.kind)}`;
+    slotInfoEl.textContent = title;
+
+    renderItems();
+  }
+
+  function renderItems(){
+    itemsEl.innerHTML = "";
+    if (!selected.items.length){
+      itemsEl.innerHTML = `<div class="muted">등록된 표준사용량(TypeRateUsage)이 없거나, 시설 구역입니다. (시설용 표준사용량 테이블을 추가 추천)</div>`;
+      return;
+    }
+
+    selected.items.forEach((it, idx)=>{
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const left = document.createElement("div");
+      left.innerHTML = `<div style="font-weight:900">${it.code} ${it.name}</div>
+                        <div class="muted">${it.spec || ""} / ${it.unit || ""}</div>`;
+
+      const planned = document.createElement("input");
+      planned.value = it.planned_qty;
+      planned.disabled = true;
+
+      const used = document.createElement("input");
+      used.value = it.used_qty;
+      used.inputMode = "decimal";
+      used.addEventListener("input", ()=>{
+        selected.items[idx].used_qty = used.value;
+      });
+
+      row.appendChild(left);
+      row.appendChild(planned);
+      row.appendChild(used);
+      itemsEl.appendChild(row);
+    });
+
+    // 헤더 역할 안내
+    const head = document.createElement("div");
+    head.className = "muted";
+    head.style.marginBottom = "6px";
+    head.textContent = "왼쪽: 자재 / 가운데: 계획(표준) / 오른쪽: 사용(입력)";
+    itemsEl.prepend(head);
+
+    saveBtn.disabled = false;
+  }
+
+  saveBtn.addEventListener("click", async ()=>{
+    if (!selected.slotId) return;
+    saveBtn.disabled = true;
+    saveMsg.textContent = "저장 중…";
+
+    const rows = selected.items.map(it=>({
+      rate_item_id: it.rate_item_id,
+      used_qty: it.used_qty,
+      note: it.note || "",
+    }));
+
+    const res = await fetch(`/progress/api/slot/${selected.slotId}/materials/save/`, {
+      method: "POST",
+      headers: {
+        "Content-Type":"application/json",
+        "X-CSRFToken": csrftoken,
+      },
+      body: JSON.stringify({ period_id: PERIOD_ID, rows })
+    });
+    const out = await res.json();
+    saveMsg.textContent = out.ok ? `저장 완료 (${out.saved}건)` : "저장 실패";
+    saveBtn.disabled = false;
+  });
+
+  render();
+</script>
+</body>
+</html>
