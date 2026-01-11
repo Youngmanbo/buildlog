@@ -72,3 +72,12 @@ class ProgressEntry(models.Model):
         if not self.takeoff_line.rate_item:
             return None
         return self.quantity_done * self.takeoff_line.rate_item.total_cost
+
+class RateCodeMap(models.Model):
+    takeoff_code = models.CharField(max_length=64, unique=True, db_index=True)
+    rate_code = models.CharField(max_length=64, db_index=True)
+    confidence = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.takeoff_code} -> {self.rate_code} ({self.confidence})"
